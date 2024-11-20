@@ -25,6 +25,7 @@ library(corrr)
 library(parsnip)
 library(tune)
 library(glmnet)
+library(baguette)
 ```
 
 
@@ -331,6 +332,105 @@ LASSO_final |>
   predict(data_test) |>
   pull() |>
   rmse_vec(truth = data_test$sum_rbc)
+
+```
+
+
+```{r}
+tree_mod <- decision_tree(tree_depth = tune(),
+                          min_n = 20,
+                          cost_complexity = tune()) |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+
+tree_wkf <- workflow() |>
+  add_recipe(rec1) |>
+  add_model(tree_mod)
+
+temp <- tree_wkf |> 
+  tune_grid(resamples = data_fold)
+temp |> 
+  collect_metrics()
+
+tree_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          levels = c(10, 5))
+
+tree_fits <- tree_wkf |> 
+  tune_grid(resamples = data_fold,
+            grid = tree_grid)
+tree_fits
+
+tree_fits |>
+  collect_metrics()
+
+tree_fits %>%
+  collect_metrics() %>%
+  mutate(tree_depth = factor(tree_depth)) %>%
+  ggplot(aes(cost_complexity, mean, color = tree_depth)) +
+  geom_line(linewidth = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) +
+  scale_x_log10(labels = scales::label_number()) +
+  scale_color_viridis_d(option = "plasma", begin = .9, end = 0)
+
+tree_fits |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  arrange(mean)
+
+tree_best_params <- select_best(tree_fits)
+tree_best_params
+
+tree_final_wkf <- tree_wkf |>
+  finalize_workflow(tree_best_params)
+
+tree_final_fit <- tree_final_wkf |>
+  last_fit(bike_split)
+tree_final_fit
+
+tree_final_fit |>
+  collect_metrics()
+
+tree_final_model <- extract_workflow(tree_final_fit) 
+tree_final_model
+
+
+```
+
+
+```{r}
+bag_spec <- bag_tree(tree_depth = 5, min_n = 10, cost_complexity = tune()) |>
+ set_engine("rpart") |>
+ set_mode("classification")
+
+
+
+bag_wkf <- workflow() |>
+ add_recipe(rec1) |>
+ add_model(bag_spec)
+
+bag_fit <- bag_wkf |>
+ tune_grid(resamples = data_fold,
+ grid = grid_regular(cost_complexity(),
+ levels = 15),
+ metrics = metric_set(accuracy, mn_log_loss))
+bag_fit
+
+bag_fit |>
+ collect_metrics() |>
+ filter(.metric == "mn_log_loss") |>
+ arrange(mean)
+
+bag_best_params <- select_best(bag_fit, "mn_log_loss")
+bag_best_params
+
+bag_final_wkf <- bag_wkf |>
+ finalize_workflow(bag_best_params)
+bag_final_fit <- bag_final_wkf |>
+ last_fit(heart_split, metrics = metric_set(accuracy, mn_log_loss))
+
 
 ```
 
