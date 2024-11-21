@@ -26,15 +26,19 @@ library(ranger)
 ```
 
 
+
 ## Reading in Data 
+
 
 ```{r}
 data<-readr::read_csv("SeoulBikeData.csv",locale=locale(encoding="latin1"))
 ```
 
 
+
 ## Checking for Missing Values
 ### After checking to see if how many missing values we have in each columns we can see that there aren't any missing values. 
+
 ```{r}
 sum_na<-function(column){
   sum(is.na(column))
@@ -45,12 +49,16 @@ na_counts<-data|>
 print(na_counts)
 
 ```
+
 ## Exploring Basic Summaries/Values
 ### One of the things that sticks out to me is that each variable has the same number of observations which confirms there aren't any missing values. We can also see which variables are numeric or not. Finally I can see that I'll need to rename the variables to make them more user friendly. 
+
 ```{r}
 psych::describe(data)
 ```
+
 ## Here we are updating our data set.
+
 ```{r}
 #Fixing the Date variable
 data$Date<- dmy(data$Date)
@@ -68,8 +76,10 @@ data<-data|>
   rename(temp=`Temperature(°C)`,hr=Hour,humidity=`Humidity(%)`,rbc=`Rented Bike Count`,ws=`Wind speed (m/s)`,vis=`Visibility (10m)`,dpttemp=`Dew point temperature(°C)`,solrad=`Solar Radiation (MJ/m2)`,rain=`Rainfall(mm)`,snow=`Snowfall (cm)`,holiday=Holiday,season=Seasons,funday=`Functioning Day`)
 
 ```
+
 ## Creating Summaries Across Categorical variables
 # I noticed that no bike rentals happened when Functional Day equals No, so I subset the data to only have Functional Day equals Yes. 
+
 
 ```{r}
 data|>
@@ -80,7 +90,9 @@ data|>
                    .names="{.fn}_{.col}"))
 
 ```
+
 ## Manipulating the original data set that we will use for analysis.
+
 
 ```{r}
 Model_data<-data|>
@@ -101,7 +113,9 @@ Model_data<-data|>
 
 ```
 
+
 ## Recreating the summaries from above with the new model data.
+
 
 ```{r}
 Model_data|>
@@ -112,7 +126,9 @@ Model_data|>
 
 ```
 
+
 ## Finding the correlation between all numeric variables grouped by holiday and season
+
 ```{r}
 Correlation <- Model_data |>
    group_by(holiday,season)|>
@@ -120,21 +136,27 @@ Correlation <- Model_data |>
 ```
 
 
+
 ## Here is a visual representation for the number of holidays broken down by season
+
 
 ```{r}
 g <- ggplot(data = Model_data , aes(x = season, fill = holiday))
 g + geom_bar()+
  labs(x = "Season")
 ```
+
 ## Here I thought it was interesting to see the relationship between the temperture, season, and bike rentals.
+
 ```{r}
 g <- ggplot(Model_data,
  aes(x = mean_temp, y = sum_rbc, color = season))
 g + geom_point()
 ```
 
+
 ## Splitting the data on a 75/25 split.
+
 
 ```{r}
 data_split<-initial_split(Model_data,strata=season,prop=0.75)
@@ -146,7 +168,9 @@ print(data_training)
 print(data_test)
 ```
 
+
 ## Creating a 10 fold cv split on the training set
+
 
 ```{r}
 get_cv_splits <- function(data, num_folds){
@@ -173,7 +197,9 @@ folds <- get_cv_splits(data_training, 10)
 ```
 
 
+
 ## Creating a model for recipe 1
+
 ```{r}
 rec1<-recipe(sum_rbc~.,data=data_training)|>
   step_date(Date,features="dow")|>
@@ -188,7 +214,9 @@ rec1<-recipe(sum_rbc~.,data=data_training)|>
 
 
 
+
 ## Creating a model for recipe 2
+
 
 ```{r}
 rec2<-recipe(sum_rbc~.,data=data_training)|>
@@ -203,7 +231,9 @@ rec2<-recipe(sum_rbc~.,data=data_training)|>
 ```
 
 
+
 ## Creating a model for recipe 3
+
 ```{r}
 rec3<-recipe(sum_rbc~.,data=data_training)|>
   update_role(Date,new_role = "ID")|>
@@ -220,7 +250,9 @@ rec3<-recipe(sum_rbc~.,data=data_training)|>
 
 
 
+
 ## Model for Recipe 1
+
 ```{r}
 model<-linear_reg() %>%
   set_engine("lm")
@@ -262,7 +294,9 @@ ffit|>
 ```
 
 
+
 ## LASSO Model
+
 
 ```{r}
 
@@ -332,7 +366,9 @@ LASSO_final |>
 
 ```
 
+
 ## Regression Tree Model
+
 ```{r}
 tree_mod <- decision_tree(tree_depth = tune(),
                           min_n = 20,
@@ -396,7 +432,9 @@ tree_final_model
 
 ```
 
+
 ## Bagged Tree Model
+
 ```{r}
 bag_spec <- bag_tree(tree_depth = 5, min_n = 10, cost_complexity = tune()) |>
  set_engine("rpart") |>
@@ -432,7 +470,9 @@ bag_final_fit|>collect_metrics()
 
 ```
 
+
 ## Random Forest Model
+
 
 ```{r}
 
