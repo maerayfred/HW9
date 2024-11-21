@@ -26,6 +26,7 @@ library(parsnip)
 library(tune)
 library(glmnet)
 library(baguette)
+library(ranger)
 ```
 
 
@@ -288,7 +289,7 @@ LASSO_wkf<- workflow()|>
   
   #A warning will occur for one value of the tuning parameter, safe to ignore
 LASSO_grid <- LASSO_wkf |>
-  tune_grid(resamples = bike_CV_folds,
+  tune_grid(resamples = data_fold,
             grid = grid_regular(penalty(), levels = 200)) 
 
 LASSO_grid
@@ -335,7 +336,7 @@ LASSO_final |>
 
 ```
 
-
+## Regression Tree Model
 ```{r}
 tree_mod <- decision_tree(tree_depth = tune(),
                           min_n = 20,
@@ -387,7 +388,7 @@ tree_final_wkf <- tree_wkf |>
   finalize_workflow(tree_best_params)
 
 tree_final_fit <- tree_final_wkf |>
-  last_fit(bike_split)
+  last_fit(data_split)
 tree_final_fit
 
 tree_final_fit |>
@@ -399,11 +400,11 @@ tree_final_model
 
 ```
 
-
+## Bagged Tree Model
 ```{r}
 bag_spec <- bag_tree(tree_depth = 5, min_n = 10, cost_complexity = tune()) |>
  set_engine("rpart") |>
- set_mode("classification")
+ set_mode("regression")
 
 
 
@@ -415,22 +416,57 @@ bag_fit <- bag_wkf |>
  tune_grid(resamples = data_fold,
  grid = grid_regular(cost_complexity(),
  levels = 15),
- metrics = metric_set(accuracy, mn_log_loss))
+ metrics = metric_set(rmse))
 bag_fit
 
 bag_fit |>
  collect_metrics() |>
- filter(.metric == "mn_log_loss") |>
+ filter(.metric == "rmse") |>
  arrange(mean)
 
-bag_best_params <- select_best(bag_fit, "mn_log_loss")
+bag_best_params <- select_best(bag_fit)
 bag_best_params
 
 bag_final_wkf <- bag_wkf |>
  finalize_workflow(bag_best_params)
 bag_final_fit <- bag_final_wkf |>
- last_fit(heart_split, metrics = metric_set(accuracy, mn_log_loss))
+ last_fit(data_split, metrics = metric_set(rmse))
+
+bag_final_fit|>collect_metrics()
+
+```
+
+## Random Forest Model
+
+```{r}
 
 
+rf_spec <- rand_forest(mtry = tune()) |>
+ set_engine("ranger") |>
+ set_mode("regression")
+
+rf_wkf <- workflow() |>
+ add_recipe(rec1) |>
+ add_model(rf_spec)
+
+rf_fit <- rf_wkf |>
+ tune_grid(resamples = data_fold,
+ grid = 7,
+ metrics = metric_set(rmse))
+
+rf_fit |>
+ collect_metrics() |>
+ filter(.metric == "rmse") |>
+ arrange(mean)
+
+rf_best_params <- select_best(rf_fit)
+rf_best_params
+
+rf_final_wkf <- rf_wkf |>
+ finalize_workflow(rf_best_params)
+rf_final_fit <- rf_final_wkf |>
+ last_fit(data_split, metrics = metric_set(rmse))
+
+rf_final_fit |> collect_metrics()
 ```
 
